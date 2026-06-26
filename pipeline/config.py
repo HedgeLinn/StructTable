@@ -61,3 +61,28 @@ ODL_CONFIG = {
     "import": "opendataloader",
     "function": "convert_pdf",
 }
+
+# ═══════════════════════════════════════════════════════════════
+# MinerU — Cloud PDF -> Markdown (async batch-job API)
+# ═══════════════════════════════════════════════════════════════
+
+MINERU_CONFIG = {
+    "token": _env("MINERU_TOKEN"),
+    "url": _env("MINERU_URL", "https://mineru.net/api/v4"),
+    "model_version": _env("MINERU_MODEL_VERSION", "vlm"),
+    "language": _env("MINERU_LANGUAGE", "ch"),
+    "enable_table": _env("MINERU_ENABLE_TABLE", "true").lower() == "true",
+    "poll_interval_seconds": int(_env("MINERU_POLL_INTERVAL", "10")),
+    "poll_max_seconds": int(_env("MINERU_POLL_MAX", "600")),
+    "batch": {
+        "workers": int(_env("MINERU_BATCH_WORKERS", "3")),
+        "input_dir": _env("MINERU_BATCH_INPUT_DIR"),
+        "output_dir": _env("MINERU_BATCH_OUTPUT_DIR"),
+    },
+}
+
+# ═══════════════════════════════════════════════════════════════
+# Converter selection — "ocr_vl" (default) or "mineru"
+# ═══════════════════════════════════════════════════════════════
+
+CONVERTER = _env("CONVERTER", "ocr_vl")
