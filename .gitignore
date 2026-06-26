@@ -1,0 +1,32 @@
+# Environment
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+
+# Output
+output*/
+!output*/README.md
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Large data files
+*.pdf
+input/
+input2/
+
+# Debug
+debug_*.py
+debug_*.txt
+debug_*.json
+*_check*.py
