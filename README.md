@@ -1,93 +1,43 @@
-# PDF2json
+# StructTable
 
-将工程预算定额 PDF 转换为结构化 JSON 数据。使用 LLM 自动发现表格结构，
-无需预设字段名，支持定额表、全费用清单、区域定价表等多种格式。
+从 PDF 中提取表格数据，转换为结构化 JSON。使用 LLM 自动发现表格结构，无需预设字段名，支持多种表格格式。
 
 ## 快速开始
 
 ```bash
-# 1. 安装依赖
+# 1. 安装
 pip install -e .
+pip install -e ".[ui]"       # Web UI
 
-# 2. 配置环境变量
-cp .env.example .env   # 编辑 .env 填入 API key 和 MinerU token
+# 2. 配置
+cp .env.example .env          # 编辑填入 LLM_API_KEY 和 MINERU_TOKEN
 
 # 3. 运行
-python -m pipeline.main convert input.md --output output.json
-python -m pipeline.main convert input.pdf --converter mineru --output output.json
-python -m pipeline.main batch input_dir/ --output output_dir/
+streamlit run app/main.py --server.port 8501
+
+# 或使用 Claude Code Agent Skills
+# /structtable-workspace upload <file.pdf>
+# /structtable-run <file.pdf> --project <名称>
+# /structtable-verify [run_id]
+# /structtable-codegen <run_id>
 ```
 
 ## 架构
 
 ```
-PDF ──┬──[OCR_VL]──→ Markdown (HTML 表格 + 上下文)
-      │                    │
-      │                    └──[opendataloader]──→ GFM Markdown (条目边界参考)
-      │                                                    │
-      │                                          [postprocess.py] 融合
-      │                                                    │
-      └──[MinerU]──→ Markdown (干净 HTML 表格 + 上下文)    │
-                                          │                 │
-                                          └─────┬───────────┘
-                                                │
-                                    [llm_extractor.py] LLM 提取
-                                                │
-                                              JSON
+PDF → [MinerU/OCR_VL] → Markdown → [LLM/Agent提取] → 结构化 JSON
+                                              │
+                                      [Agent 校验补全]
 ```
 
-### PDF 转换器选择
+## 功能
 
-| 转换器 | 命令 | 特点 |
-|--------|------|------|
-| **MinerU** (推荐) | `--converter mineru` | 干净表格 + 材料行天然分离 + 完整上下文，无需后处理 |
-| OCR_VL | `--converter ocr_vl` (默认) | 有上下文但合并单元格内多条目，需 ODL 融合修复 |
-
-```bash
-# 通过 .env 设置默认值
-CONVERTER=mineru
-
-# 或 CLI 显式指定
-python -m pipeline.main convert input.pdf --converter mineru
-python -m pipeline.main batch PDF_DIR/ --converter mineru
-```
-
-### 管线组件
-
-```
-pipeline/
-├── main.py              # CLI 入口 (convert / batch / validate)
-├── config.py            # 基础设施配置 (从 .env 读取)
-├── document_parser.py   # 文档解析 + 多表捕获 + 重复段合并
-├── llm_extractor.py     # LLM 提取引擎 (自动发现结构)
-│                        #   - 续表识别与合并
-│                        #   - Token 估计与智能拆分
-│                        #   - 后处理孤立条目归附
-│                        #   - 异常输出自动重试
-│                        #   - 健康监控面板
-├── postprocess.py       # OCR_VL + ODL 融合修复 (仅 OCR_VL 路径需要)
-├── utils.py             # 通用工具 (解析器 / 校验器)
-└── pdf2markdown/
-    ├── base.py          #   ConverterAdapter 抽象基类
-    ├── ocr_vl.py        #   OCR_VL HTTP API 适配器
-    ├── mineru.py        #   MinerU 云端适配器 (新增)
-    └── batch_convert.py #   批量转换脚本
-```
-
-## 配置
-
-所有配置通过环境变量管理，参见 `.env.example`。
-
-### MinerU 配置
-
-```ini
-CONVERTER=mineru
-MINERU_TOKEN=your-token              # 从 mineru.net API 管理页面获取
-MINERU_URL=https://mineru.net/api/v4
-MINERU_MODEL_VERSION=vlm             # vlm | pipeline
-MINERU_POLL_MAX=600                  # 最长等待（秒）
-MINERU_BATCH_WORKERS=3
-```
+- **PDF 表格提取**: 自动识别表格结构，转换为 JSON
+- **双转换引擎**: MinerU（云端推荐）/ OCR_VL（本地）
+- **双提取方式**: LLM 逐表提取 / Agent 代码生成
+- **智能校验**: Agent 自动对比原始数据修复遗漏
+- **Web UI**: 可视化上传、配置、浏览、对比
+- **工作区隔离**: 运行时数据与代码分离
 
 ## 许可
 

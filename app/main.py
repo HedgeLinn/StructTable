@@ -1,4 +1,4 @@
-"""PDF2json Web UI — 与 Claude Code Agent 协作的前端."""
+"""StructTable Web UI — 与 Claude Code Agent 协作的前端."""
 import streamlit as st
 from pathlib import Path
 import sys
@@ -6,7 +6,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 st.set_page_config(
-    page_title="PDF2json — 定额表结构化",
+    page_title="StructTable — PDF 表格结构化",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -15,8 +15,8 @@ st.set_page_config(
 
 def main():
     with st.sidebar:
-        st.markdown("## 📊 PDF2json")
-        st.caption("工程预算定额 PDF → 结构化 JSON")
+        st.markdown("## 📊 StructTable")
+        st.caption("PDF 表格 → 结构化 JSON")
 
         # Quick status
         from app.utils import count_runs_by_status, count_projects

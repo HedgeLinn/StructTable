@@ -141,13 +141,13 @@ def _run(files, project, converter, backend):
 
     **校验数据**（推荐）：
     ```
-    /pdf2json-verify {run_id}
+    /structtable-verify {run_id}
     ```
     Agent 将对比原始 Markdown 逐条校验，修复 6 类常见问题。
 
     **或用代码提取**（省钱，省 token）：
     ```
-    /pdf2json-codegen {run_id}
+    /structtable-codegen {run_id}
     ```
     Agent 将读表结构 → 生成解析代码 → 批量执行，1 次 LLM 调用替代 N 次。
     """)

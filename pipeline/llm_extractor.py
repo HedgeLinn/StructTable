@@ -21,7 +21,7 @@ from .utils import read_file, write_json, validate_all, print_validation_report
 # Prompt
 # ═══════════════════════════════════════════════════════════════
 
-SYSTEM_PROMPT = """你是一个工程预算定额表格的结构化提取专家。观察 HTML 表格，自动发现数据结构，转换为 JSON。
+SYSTEM_PROMPT = """你是一个 HTML 表格结构化提取专家。观察 HTML 表格，自动发现数据结构，转换为 JSON。
 
 ## 核心规则
 

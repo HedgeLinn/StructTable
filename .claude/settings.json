@@ -4,7 +4,7 @@
       {
         "description": "Suggest verification after pipeline completes",
         "matcher": "python -m pipeline.main",
-        "prompt": "If the pipeline completed successfully and produced JSON output, ask the user if they want to run /pdf2json-verify to check data quality."
+        "prompt": "If the pipeline completed successfully and produced JSON output, ask the user if they want to run /structtable-verify to check data quality."
       }
     ]
   }

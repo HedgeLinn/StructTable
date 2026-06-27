@@ -1,7 +1,7 @@
 [project]
-name = "pdf2json"
+name = "structtable"
 version = "1.0.0"
-description = "Extract structured JSON from engineering quota/budget PDF tables using LLM"
+description = "Extract structured JSON from PDF tables using LLM — generic table-to-JSON pipeline"
 requires-python = ">=3.11"
 dependencies = [
     "beautifulsoup4>=4.12",
@@ -22,7 +22,7 @@ ui = [
 ]
 
 [project.scripts]
-pdf2json = "pipeline.main:main"
+structtable = "pipeline.main:main"
 
 [build-system]
 requires = ["setuptools>=68"]
