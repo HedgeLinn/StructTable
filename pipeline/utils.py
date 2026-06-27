@@ -296,40 +296,73 @@ def smart_split_names_units_prices(names_raw: str, units_raw: str, prices_raw: s
 
 # ── Validation ──────────────────────────────────────────────────
 
+def _find_id_display(item: dict) -> str:
+    """Find a display-friendly ID from any item, no hardcoded field names."""
+    import re
+    id_pat = re.compile(r'编号|编码|[iI][dD]|序号|代码|[cC]ode')
+    id_val_pat = re.compile(r'^\d+[-.\s]?\d+$')
+    for k, v in item.items():
+        if k.startswith('_'):
+            continue
+        if id_pat.search(k):
+            return str(v)
+    for k, v in item.items():
+        if k.startswith('_'):
+            continue
+        if isinstance(v, str) and id_val_pat.match(v):
+            return str(v)
+    return '?'
+
+
+def _generic_sum_check(entry: dict, tolerance: float = 1.0) -> list[str]:
+    """Generic check: any numeric field that looks like it should equal
+    the sum of sub-fields in a nested dict. No hardcoded field names."""
+    warnings = []
+    numeric_fields = {}
+    dict_fields = {}
+    for k, v in entry.items():
+        if k.startswith('_'):
+            continue
+        if isinstance(v, (int, float)) and v != 0:
+            numeric_fields[k] = v
+        if isinstance(v, dict):
+            nums = [vv for vv in v.values() if isinstance(vv, (int, float))]
+            if len(nums) >= 2:
+                dict_fields[k] = (v, sum(nums))
+    # Check if any numeric field approximately equals a dict's sum
+    for nk, nv in numeric_fields.items():
+        for dk, (dv, dsum) in dict_fields.items():
+            if nk == dk:
+                continue
+            diff = abs(nv - dsum)
+            if diff > tolerance and nv > 0 and dsum > 0:
+                # Check if this looks like a sum relationship
+                # (the numeric field name often contains 价/额/总/total/sum)
+                if any(w in nk for w in ('价', '额', '总', 'total', 'sum', '合计')):
+                    warnings.append(
+                        f'Sum mismatch: {nk}={nv}, {dk} sum={dsum}, diff={round(diff, 2)}')
+    return warnings
+
+
 def validate_entry(entry: dict, tolerance: float = 1.0) -> dict:
-    """Generic structural validation. No hardcoded field names.
+    """Generic structural validation with no hardcoded field names.
 
     - Error: entry is completely empty
-    - Warning: any string field with an empty value
-    - Fee-sum check: only when both 基价 and 费用构成 are present
+    - Warning: empty string values, potential sum mismatches
     """
     validation = {'warnings': [], 'errors': []}
 
-    # Only error on truly empty objects
     if not entry or (isinstance(entry, dict) and len(entry) <= 1
                      and '_source' in entry):
         validation['errors'].append('Entry is empty')
 
-    # Warn on empty string values (whatever the field name)
     for key, val in entry.items():
         if key.startswith('_'):
             continue
         if isinstance(val, str) and not val.strip():
             validation['warnings'].append(f'Empty field: {key}')
 
-    # Fee-sum check (only when both fields exist in this entry)
-    if '基价' in entry and '费用构成' in entry:
-        base_price = entry.get('基价', 0) or 0
-        fees = entry.get('费用构成') or {}
-        if fees and base_price:
-            fee_sum = (fees.get('人工费', 0) or 0) + \
-                      (fees.get('材料费', 0) or 0) + \
-                      (fees.get('机械费', 0) or 0)
-            diff = abs(base_price - fee_sum)
-            if diff > tolerance and base_price != 0:
-                validation['warnings'].append(
-                    f'Fee sum mismatch: 基价={base_price}, '
-                    f'人工+材料+机械={fee_sum}, diff={round(diff, 2)}')
+    validation['warnings'].extend(_generic_sum_check(entry, tolerance))
 
     entry['_validation'] = validation
     return entry
@@ -351,9 +384,9 @@ def print_validation_report(entries: list[dict]) -> None:
         print('  Errors:')
         for e in entries:
             for err in e.get('_validation', {}).get('errors', []):
-                print(f'    [{e.get("定额编号", "?")}] {err}')
+                print(f'    [{_find_id_display(e)}] {err}')
     if warnings:
         print('  Warnings:')
         for e in entries:
             for warn in e.get('_validation', {}).get('warnings', []):
-                print(f'    [{e.get("定额编号", "?")}] {warn}')
+                print(f'    [{_find_id_display(e)}] {warn}')

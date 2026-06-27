@@ -191,14 +191,12 @@ def _is_text_header_row(row) -> bool:
 
 
 def fix_header_rowspan(html_table: str) -> tuple[str, bool]:
-    """Detect and fix truncated header rowspan (rowspan=2 should be 3).
+    """OCR_VL fix: detect truncated header rowspan using structural heuristics.
 
-    Detection: 项目名称 rowspan=N, span's last row is text (non-numeric),
-    immediately followed by a "基价" row whose values look like pipe diameters
-    (not prices) → rowspan should be N+1.
-
-    Fix: rowspan N→N+1, insert missing spec row, shift misaligned data upward,
-    estimate missing 机械费 as 基价 - 人工费 - 材料费.
+    Looks for: rowspan cell → text-only row at span boundary →
+    followed by a "price/fee indicator" row whose values are small params.
+    Fix: expand rowspan, insert missing row, shift data, estimate gap.
+    (OCR_VL-specific — not used in MinerU path.)
     """
     soup = BeautifulSoup(html_table, "html.parser")
     rows = soup.find_all("tr")

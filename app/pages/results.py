@@ -45,11 +45,11 @@ def show():
         return
 
     # Stats
-    n_id = sum(1 for i in items if any(k in i for k in ("定额编号", "清单编码", "清单编号", "指标编号")))
+    n_id = sum(1 for i in items if parse_quota_id(i) != '?')
     n_fix = sum(1 for i in items if "_fix_log" in i)
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("总条目", len(items))
-    c2.metric("含编号", n_id)
+    c2.metric("含标识符", n_id)
     c3.metric("Agent 修复", n_fix)
     c4.metric("状态", status_label(meta.get("status", "?")))
 
@@ -78,12 +78,23 @@ def show():
         st.subheader("条目列表")
         for idx, item in enumerate(filtered):
             qid = parse_quota_id(item)
-            name = item.get("项目名称", "?")[:25]
-            spec = item.get("规格", "")
-            base = item.get("基价", "?")
+            # Auto-find a name/title field
+            name = ""
+            for k in item:
+                if not k.startswith("_") and isinstance(item[k], str) and len(item[k]) < 60:
+                    if any(w in k for w in ('名称', '项目', '标题', 'name', 'title')):
+                        name = item[k][:25]
+                        break
+            if not name:
+                # Fallback: first non-ID string field
+                for k, v in item.items():
+                    if k.startswith("_") or k == qid or parse_quota_id(item) == str(v):
+                        continue
+                    if isinstance(v, str) and len(v) < 60:
+                        name = v[:25]
+                        break
             fixed = "🔧 " if "_fix_log" in item else ""
-            if st.button(f"{fixed}{qid}  {name}", key=f"it_{idx}", use_container_width=True,
-                         help=f"规格:{spec}  基价:{base}"):
+            if st.button(f"{fixed}{qid}  {name}", key=f"it_{idx}", use_container_width=True):
                 st.session_state.detail_item = item
 
     with right:
@@ -101,34 +112,52 @@ def show():
 
 
 def _render_detail(item: dict, md: str | None):
+    """Generic detail renderer — auto-discovers all fields, no hardcoded names."""
     qid = parse_quota_id(item)
     st.markdown(f"### {qid}")
-    st.caption(item.get("项目名称", item.get("清单名称", "?")))
 
+    # Separate fields by type
+    scalars = {}
+    dicts = {}
+    lists = {}
     for k, v in item.items():
-        if k.startswith("_") or k in ("人工", "材料", "机械", "费用构成"):
+        if k.startswith("_"):
             continue
-        st.markdown(f"- **{k}**: {v}")
+        if isinstance(v, (list,)):
+            lists[k] = v
+        elif isinstance(v, (dict,)):
+            dicts[k] = v
+        else:
+            scalars[k] = v
 
-    fee = item.get("费用构成")
-    if fee:
-        st.markdown("**费用构成**")
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("人工费", fee.get("人工费", 0))
-        c2.metric("材料费", fee.get("材料费", 0))
-        c3.metric("机械费", fee.get("机械费", 0))
-        c4.metric("合计", fee.get("人工费", 0) + fee.get("材料费", 0) + fee.get("机械费", 0))
+    # Scalar fields (title, spec, unit, price, etc.)
+    if scalars:
+        for k, v in scalars.items():
+            st.markdown(f"- **{k}**: {v}")
 
-    for cat in ("人工", "材料", "机械"):
-        rows = item.get(cat, [])
-        if rows:
-            with st.expander(f"{cat} ({len(rows)})", expanded=len(rows) <= 5):
-                for r in rows:
-                    c1, c2, c3, c4 = st.columns([3, 1, 1, 1])
-                    c1.markdown(f"**{r.get('名称','?')}**")
-                    c2.caption(r.get("单位", "?"))
-                    c3.caption(f"¥{r.get('单价',0)}")
-                    c4.caption(f"×{r.get('数量',0)}")
+    # Dict fields (e.g. fee breakdowns)
+    for dk, dv in dicts.items():
+        st.markdown(f"**{dk}**")
+        cols = st.columns(len(dv) + 1)
+        total = 0
+        for i, (sk, sv) in enumerate(dv.items()):
+            cols[i].metric(sk, sv)
+            if isinstance(sv, (int, float)):
+                total += sv
+        cols[-1].metric("合计", total)
+
+    # List fields (e.g. detail groups with 名称/单位/单价/数量)
+    for lk, lv in lists.items():
+        if not lv or not isinstance(lv[0], dict):
+            continue
+        with st.expander(f"{lk} ({len(lv)})", expanded=len(lv) <= 5):
+            # Auto-detect sub-keys from first item
+            sub_keys = [k for k in lv[0].keys() if not k.startswith("_")]
+            for row in lv:
+                rcols = st.columns(len(sub_keys))
+                for i, sk in enumerate(sub_keys):
+                    val = row.get(sk, "?")
+                    rcols[i].caption(f"{sk}: {val}")
 
     # Agent fix log
     fixes = item.get("_fix_log", [])

@@ -127,9 +127,19 @@ def count_runs_by_status(status: str) -> int:
 
 
 def parse_quota_id(item: dict) -> str:
-    for k in ("定额编号", "清单编码", "清单编号", "指标编号"):
-        if k in item:
-            return str(item[k])
+    """Auto-detect the ID field of an item. Returns its value or '?'."""
+    id_pat = re.compile(r'编号|编码|[iI][dD]|序号|代码|[cC]ode')
+    id_val_pat = re.compile(r'^\d+[-.\s]?\d+$')
+    for k, v in item.items():
+        if k.startswith('_'):
+            continue
+        if id_pat.search(k):
+            return str(v)
+    for k, v in item.items():
+        if k.startswith('_'):
+            continue
+        if isinstance(v, str) and id_val_pat.match(v):
+            return str(v)
     return "?"
 
 
