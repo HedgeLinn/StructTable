@@ -65,13 +65,12 @@ python -c "import bs4, requests, dotenv; print('✅ 核心依赖已安装')" 2>&
               ┌────────────┴────────────┐
               │   BACKEND 选择           │
               ├───────────┬─────────────┤
-              │ llm_codegen │ llm_direct │
-              │ (新增)      │ (现有)     │
-              │ 1次LLM调用  │ N次LLM调用 │
-              │ 生成提取代码 │ 逐表提取   │
-              │ 确定性执行   │ 语义容错   │
-              │ 适合云端API  │ 适合本地LLM│
-              └───────────┬─┴───────────┘
+              │ llm_direct│ llm_codegen │
+              │ (Web UI✅)│ (Agent Only)│
+              │ CLI 调API │ Claude读表   │
+              │ N次LLM调用│ →写代码→执行 │
+              │ 语义容错   │ 确定性高     │
+              └───────────┴─┬───────────┘
                           │
                     结构化 JSON
                           │
@@ -109,15 +108,18 @@ python -c "import bs4, requests, dotenv; print('✅ 核心依赖已安装')" 2>&
 
 ## 两条提取后端
 
-| | `llm_direct` (现有) | `llm_codegen` (新增) |
+| | `llm_direct` | `llm_codegen` |
 |---|---|---|
-| 定位 | LLM 逐表提取 | LLM 生成代码 → 代码批量提取 |
-| LLM 调用次数 | N 次（每个 table chunk 一次） | 1 次/表类型 |
-| 确定性 | 低（LLM 输出有方差） | 高（代码逻辑确定） |
-| 对HTML噪声容忍度 | 高（语义理解容错） | 较低（代码机械执行） |
-| 成本 | 高（N × token） | 低（生成 token + 执行免费） |
-| 可复用 | 否 | 是（代码可沉淀为模板） |
-| 适用场景 | 本地大模型 (token 免费) | 云端 API (token 敏感) |
+| **谁执行** | pipeline 代码调 LLM API | **Claude Agent 亲自读表→写代码→执行** |
+| **Web UI 支持** | ✅ `上传与运行` | ❌ Web UI 无法替代 Agent 推理 |
+| **Agent Skill** | `/pdf2json-run` 调用 CLI | `/pdf2json-codegen` |
+| **LLM 调用次数** | N 次（每表一次） | **1 次**（生成代码） |
+| **确定性** | 低（API 返回有方差） | 高（代码逻辑确定） |
+| **HTML 噪声容忍** | 高（语义理解容错） | 较低（代码机械执行） |
+| **可复用** | 否 | 是（代码可沉淀到 workspace） |
+| **适用** | 本地大模型 (不在意 token) | 云端 API (token 敏感) |
+
+> **关键区分**：`llm_codegen` 不是 pipeline 代码功能，是 Agent Skill。只有 Claude 的推理能力能读表→写代码→执行→校验。
 
 ## 已知数据丢失模式（Agent 自动补全需处理的 6 类问题）
 
@@ -180,9 +182,10 @@ structural_PDF/
 ├── .claude/
 │   ├── settings.json            #   项目 hooks（管线完成 → 建议 verify）
 │   └── skills/
-│       ├── pdf2json-workspace/  # Skill: 工作区管理
-│       ├── pdf2json-run/        # Skill: 执行代码管线（交互式引导）
-│       └── pdf2json-verify/     # Skill: 质量检验 + Agent 自动补全
+│       ├── pdf2json-workspace/  # Skill: 工作区管理（Agent）
+│       ├── pdf2json-run/        # Skill: 执行管线 llm_direct（Agent 调 CLI）
+│       ├── pdf2json-codegen/    # Skill: 读表→写代码→执行（纯 Agent）
+│       └── pdf2json-verify/     # Skill: 质量检验 + 自动补全（纯 Agent）
 ├── app/                         # Web UI（Streamlit 前端）
 │   ├── main.py                  #   入口 + 侧边栏导航
 │   ├── utils.py                 #   工作区扫描、run 读写
@@ -238,32 +241,34 @@ python -m pipeline.main validate output.json
 Web UI (Streamlit)                 Claude Code Agent
    │                                     │
    ├─ 上传 PDF                           │
-   ├─ 配置参数                           │
-   ├─ 执行管线 ─────────▶ workspace/      │
+   ├─ 选转换器(Mineru/OCR_VL)            │
+   ├─ 执行 llm_direct ──────▶ workspace/  │
    ├─ 显示结果                           │
-   ├─ "请在 Claude Code 运行:             │
-   │   /pdf2json-verify <run_id>" ──────▶ 读取 Markdown + JSON
-   │                                     ├─ 6 类问题检测
-   │                                     ├─ ≤10% 自动补全
-   │                                     ├─ 回写 verified/
+   ├─ "Agent 可做:                        │
+   │   /pdf2json-verify <run_id> 校验" ──▶ 读 Markdown + JSON
+   │   "/pdf2json-codegen <run_id> 省钱" ─▶ 读表→写代码→执行
+   │                                     ├─ 校验/代码生成完成
+   │                                     ├─ 回写 verified/ 或 codegen/
    │  ◀────────────────────────────── done
-   ├─ 刷新 → 查看 Agent 修复结果          │
+   ├─ 刷新 → 查看 Agent 修复/代码结果    │
    └─ 审核 + 导出                        │
 ```
 
-- **Web UI 负责**: 上传、配置、执行管线、可视化结果、历史管理
-- **Agent 负责**: 智能校验、对比 Markdown 修正数据、处理复杂语义问题
+- **Web UI 负责**: 上传、选转换器、跑 `llm_direct`、可视化、对比
+- **Agent 负责**: `llm_codegen`（写代码提取）、`verify`（智能校验补全）
+- **共享**: `workspace/` 是两者之间的数据总线
 
 ## Agent Skills
 
-| Skill | 触发方式 | 职责 |
-|-------|---------|------|
-| `pdf2json-workspace` | `/pdf2json-workspace <upload\|list\|compare\|clean>` | 管理上传、浏览运行、对比结果、清理 |
-| `pdf2json-run` | `/pdf2json-run [文件] --project <名>` | 交互式引导 + 执行管线 |
-| `pdf2json-verify` | `/pdf2json-verify [run_id]` | 6 类问题检测 + ≤10% 自动补全 |
+| Skill | 触发方式 | 职责 | 执行者 |
+|-------|---------|------|--------|
+| `pdf2json-workspace` | `/pdf2json-workspace <upload\|list\|compare\|clean>` | 管理工作区 | Agent |
+| `pdf2json-run` | `/pdf2json-run [文件] --project <名>` | 交互引导 + 执行管线 (llm_direct) | Agent 调 CLI |
+| `pdf2json-codegen` | `/pdf2json-codegen <run_id>` | 读表→写代码→执行→校验 | **纯 Agent** |
+| `pdf2json-verify` | `/pdf2json-verify [run_id]` | 6 类检测 + ≤10% 自动补全 | **纯 Agent** |
 
-调用链：`workspace upload → run → verify`，各 Skill 独立可复用。
-Web UI 管线完成后自动提示用户运行 verify。
+调用链：`workspace upload → run（或 codegen）→ verify`。
+Web UI 可触发 `llm_direct`，但 `codegen` 和 `verify` 只有 Agent 能做。
 
 ## 核心设计决策
 

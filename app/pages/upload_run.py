@@ -26,15 +26,11 @@ def show():
 
     # ── Config ──
     st.subheader("2️⃣ 配置")
-    c1, c2 = st.columns(2)
-    with c1:
-        converter = st.radio("PDF 转换器", ["mineru", "ocr_vl"],
-                             format_func=lambda x: f"🌟 MinerU (推荐)" if x == "mineru" else "OCR_VL",
-                             index=0, horizontal=True)
-    with c2:
-        backend = st.radio("提取后端", ["llm_direct", "llm_codegen"],
-                           format_func=lambda x: "LLM 直接提取" if x == "llm_direct" else "LLM 生成代码 (省钱)",
-                           index=0, horizontal=True)
+    st.radio("PDF 转换器", ["mineru", "ocr_vl"],
+             format_func=lambda x: f"🌟 MinerU (推荐)" if x == "mineru" else "OCR_VL",
+             index=0, horizontal=True, key="converter")
+    converter = st.session_state.converter
+    backend = "llm_direct"  # Web UI 仅支持 llm_direct；llm_codegen 由 Agent Skill 执行
 
     # ── Run ──
     st.subheader("3️⃣ 执行")
@@ -141,14 +137,19 @@ def _run(files, project, converter, backend):
     st.markdown("### 🤖 下一步：Agent 智能校验")
 
     st.markdown(f"""
-    在 **Claude Code** 对话中运行以下命令，Agent 将自动：
-    - 🔍 对比原始 Markdown 逐条校验
-    - 🛠️ 修复续表孤立、费用偏差、规格错误等问题
-    - 📥 修复结果回写到 Web UI 可直接查看
+    在 **Claude Code** 对话中运行：
 
+    **校验数据**（推荐）：
     ```
     /pdf2json-verify {run_id}
     ```
+    Agent 将对比原始 Markdown 逐条校验，修复 6 类常见问题。
+
+    **或用代码提取**（省钱，省 token）：
+    ```
+    /pdf2json-codegen {run_id}
+    ```
+    Agent 将读表结构 → 生成解析代码 → 批量执行，1 次 LLM 调用替代 N 次。
     """)
 
     st.info("💡 **提示**：Agent 校验完成后，回到本页面刷新即可在「📋 结果浏览」中查看修复结果。")
