@@ -178,13 +178,20 @@ structural_PDF/
 │   ├── uploads/               #   用户上传的 PDF
 │   └── runs/                  #   每次管线的完整产物
 ├── .claude/
+│   ├── settings.json            #   项目 hooks（管线完成 → 建议 verify）
 │   └── skills/
-│       ├── pdf2json-workspace/# Skill: 工作区管理
-│       │   └── SKILL.md
-│       ├── pdf2json-run/      # Skill: 执行代码管线
-│       │   └── SKILL.md
-│       └── pdf2json-verify/   # Skill: 质量检验 + Agent 自动补全
-│           └── SKILL.md
+│       ├── pdf2json-workspace/  # Skill: 工作区管理
+│       ├── pdf2json-run/        # Skill: 执行代码管线（交互式引导）
+│       └── pdf2json-verify/     # Skill: 质量检验 + Agent 自动补全
+├── app/                         # Web UI（Streamlit 前端）
+│   ├── main.py                  #   入口 + 侧边栏导航
+│   ├── utils.py                 #   工作区扫描、run 读写
+│   └── pages/                   #   功能页面
+│       ├── dashboard.py         #     仪表盘
+│       ├── upload_run.py        #     上传 + 配置 + 执行 + Agent 交接
+│       ├── results.py           #     结果浏览 + Agent 修复展示
+│       ├── history.py           #     运行历史
+│       └── compare.py           #     运行对比
 ├── .env.example
 ├── .gitignore
 ├── pyproject.toml
@@ -197,17 +204,20 @@ structural_PDF/
 # 安装
 pip install -e .
 pip install -e ".[ocr]"      # OCR_VL 需要 PyMuPDF
-pip install -e ".[dev]"      # lxml 加速
+pip install -e ".[ui]"       # Web UI（Streamlit）
 
 # 配置
 cp .env.example .env          # 填入 LLM_API_KEY 和 MINERU_TOKEN
 
-# === Agent Skill 入口（推荐） ===
-# /pdf2json-workspace upload <file.pdf>   — 上传 PDF 到工作区
-# /pdf2json-workspace list                — 列出所有运行记录
-# /pdf2json-workspace compare <r1> <r2>   — 对比两次运行
-# /pdf2json-workspace clean --keep 10     — 清理旧运行
-# /pdf2json-run <file> --project <名>     — 执行完整管线
+# === Web UI（可视化交互） ===
+streamlit run app/main.py --server.port 8501
+# 页面: 仪表盘 / 上传运行 / 结果浏览 / 历史 / 对比
+# 管线完成后提示用户到 Claude Code 运行 /pdf2json-verify
+
+# === Agent Skill（智能校验） ===
+# /pdf2json-workspace upload <file.pdf>   — 上传到工作区
+# /pdf2json-workspace list                — 列出运行记录
+# /pdf2json-run <file> --project <名>     — 完整管线
 # /pdf2json-verify [run_id]               — 质量检验 + 自动补全
 
 # === 或直接调 CLI ===
@@ -222,15 +232,38 @@ python -m pipeline.main batch input_dir/ --output output_dir/
 python -m pipeline.main validate output.json
 ```
 
+## Web UI + Agent 协作模式
+
+```
+Web UI (Streamlit)                 Claude Code Agent
+   │                                     │
+   ├─ 上传 PDF                           │
+   ├─ 配置参数                           │
+   ├─ 执行管线 ─────────▶ workspace/      │
+   ├─ 显示结果                           │
+   ├─ "请在 Claude Code 运行:             │
+   │   /pdf2json-verify <run_id>" ──────▶ 读取 Markdown + JSON
+   │                                     ├─ 6 类问题检测
+   │                                     ├─ ≤10% 自动补全
+   │                                     ├─ 回写 verified/
+   │  ◀────────────────────────────── done
+   ├─ 刷新 → 查看 Agent 修复结果          │
+   └─ 审核 + 导出                        │
+```
+
+- **Web UI 负责**: 上传、配置、执行管线、可视化结果、历史管理
+- **Agent 负责**: 智能校验、对比 Markdown 修正数据、处理复杂语义问题
+
 ## Agent Skills
 
 | Skill | 触发方式 | 职责 |
 |-------|---------|------|
 | `pdf2json-workspace` | `/pdf2json-workspace <upload\|list\|compare\|clean>` | 管理上传、浏览运行、对比结果、清理 |
-| `pdf2json-run` | `/pdf2json-run [文件] --project <名>` | 执行完整管线，产物存入 workspace |
+| `pdf2json-run` | `/pdf2json-run [文件] --project <名>` | 交互式引导 + 执行管线 |
 | `pdf2json-verify` | `/pdf2json-verify [run_id]` | 6 类问题检测 + ≤10% 自动补全 |
 
 调用链：`workspace upload → run → verify`，各 Skill 独立可复用。
+Web UI 管线完成后自动提示用户运行 verify。
 
 ## 核心设计决策
 

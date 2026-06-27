@@ -17,6 +17,9 @@ ocr = [
 dev = [
     "lxml>=5.0",
 ]
+ui = [
+    "streamlit>=1.32",
+]
 
 [project.scripts]
 pdf2json = "pipeline.main:main"
