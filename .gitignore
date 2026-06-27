@@ -12,9 +12,12 @@ build/
 .vscode/
 .idea/
 
-# Output
+# Output (legacy)
 output*/
 !output*/README.md
+
+# Runtime workspace (uploads, runs, logs)
+workspace/
 
 # OS
 .DS_Store

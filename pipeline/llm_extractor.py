@@ -107,7 +107,6 @@ class LLMClient:
             "model": self.model,
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
             "temperature": self.temperature, "max_tokens": self.max_tokens,
-            "extra_body": {"thinking": {"type": "disabled"}},
         }
         last_error = None
         for attempt in range(self.max_retries + 1):
