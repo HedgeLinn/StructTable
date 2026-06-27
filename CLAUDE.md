@@ -2,6 +2,37 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 🚀 新用户入口（Claude 打开项目后，首先执行此流程）
+
+当你（Claude Code Agent）首次在此项目中响应新用户时，请按以下顺序引导：
+
+### 1. 欢迎与概述
+向用户简要介绍："这是 **PDF2json**——将工程预算定额 PDF 转换为结构化 JSON 的工具。支持两种 PDF 转换器（MinerU 云端 / OCR_VL 本地）和两种提取后端（LLM 逐表 / LLM 生成代码）。"
+
+### 2. 检测项目状态
+```bash
+echo "=== PDF2json 状态检测 ==="
+test -f .env && echo "✅ .env 已配置" || echo "⚠️ .env 未配置 — 需要设置 LLM API"
+test -d workspace && echo "✅ workspace/ 已就绪" || echo "⚠️ workspace/ 待初始化"
+python -c "import bs4, requests, dotenv; print('✅ 核心依赖已安装')" 2>&1 || echo "⚠️ 依赖缺失 — pip install -e ."
+```
+
+### 3. 交互式引导
+根据检测结果，用 AskUserQuestion 引导用户完成缺失步骤。参考 `.claude/skills/pdf2json-run/SKILL.md` 中的 Phase 0 流程。
+
+### 4. 技能推荐
+根据用户意图推荐合适的 Skill：
+- 用户想提取 PDF → 建议 `/pdf2json-workspace upload` → `/pdf2json-run`
+- 用户想检查数据质量 → 建议 `/pdf2json-verify`
+- 用户想管理工作区 → 建议 `/pdf2json-workspace list` / `clean`
+
+### 5. 三条核心规则
+1. **所有路径相对于项目根目录**（包含 `pipeline/` 的目录），不要使用绝对路径
+2. **重要操作前必须和用户确认**（删除运行、选择转换器、覆盖已有结果）
+3. **每个阶段完成后，主动建议下一步**（上传→运行→验证→导出）
+
+---
+
 ## 项目概述
 
 将工程预算定额 PDF 转换为结构化 JSON。支持两种提取后端，覆盖不同成本/质量场景。
