@@ -309,9 +309,10 @@ class LLMExtractor:
 
     MAX_CHARS_PER_CALL = 25000  # ~12.5k tokens, well under 8k output limit
 
-    def __init__(self, client: LLMClient, workers: int = 5):
+    def __init__(self, client: LLMClient, workers: int = 5, system_prompt: str = None):
         self.client = client
         self.workers = workers
+        self.system_prompt = system_prompt or SYSTEM_PROMPT
         self.monitor = {"total_sections": 0, "skipped": 0, "parse_errors": 0,
                         "empty_responses": 0, "orphans_reattached": 0,
                         "chunks_split": 0, "llm_errors": 0}
@@ -410,7 +411,7 @@ class LLMExtractor:
     def _call_llm(self, sec: dict, html: str, idx: int, total: int,
                   label: str, size: int, retry_strict: bool = False) -> list[dict]:
         tokens = _estimate_tokens(html)
-        system = SYSTEM_PROMPT
+        system = self.system_prompt
         if retry_strict:
             system += ("\n\n【重要提醒】上一次你输出的 JSON 缺少编号字段。"
                        "每个顶层对象必须包含一个标识符字段（编号/编码/ID等）。"
@@ -532,8 +533,24 @@ def _parse_json_response(text: str | None) -> list[dict]:
 # ═══════════════════════════════════════════════════════════════
 
 def extract_with_llm(sections: list[dict], client: LLMClient,
-                     workers: int = 5, validate: bool = True) -> list[dict]:
-    extractor = LLMExtractor(client, workers=workers)
+                     workers: int = 5, validate: bool = True,
+                     use_strategy: bool = True) -> list[dict]:
+    """Extract structured data from parsed sections.
+
+    Args:
+        sections: Output from document_parser.parse_sections()
+        client: LLMClient instance
+        workers: Number of parallel workers
+        validate: Whether to run structural validation
+        use_strategy: If True, use strategy_selector for dynamic prompt (1 extra LLM call).
+                      If False, use the default SYSTEM_PROMPT.
+    """
+    system_prompt = None
+    if use_strategy:
+        from .strategy_selector import select_or_generate_strategy
+        system_prompt, strategy_name = select_or_generate_strategy(sections, client)
+
+    extractor = LLMExtractor(client, workers=workers, system_prompt=system_prompt)
     items = extractor.extract(sections)
     if validate and items:
         items = validate_all(items)

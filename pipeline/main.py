@@ -38,7 +38,8 @@ def _get_llm_client():
 
 # ── Pipeline ───────────────────────────────────────────────────
 
-def run_pipeline(md_content: str, dry_run: bool = False) -> list[dict]:
+def run_pipeline(md_content: str, dry_run: bool = False,
+                  use_strategy: bool = True) -> list[dict]:
     """Parse → extract → validate."""
     sections = parse_sections(md_content)
     print(f'  Parsed {len(sections)} sections')
@@ -56,7 +57,9 @@ def run_pipeline(md_content: str, dry_run: bool = False) -> list[dict]:
     from .llm_extractor import extract_with_llm
     client = _get_llm_client()
     print(f'  Backend: LLM ({LLM_CONFIG["model"]})')
-    items = extract_with_llm(sections, client, workers=LLM_CONFIG["workers"])
+    print(f'  Strategy: {"dynamic (LLM classify)" if use_strategy else "fixed (default prompt)"}')
+    items = extract_with_llm(sections, client, workers=LLM_CONFIG["workers"],
+                             use_strategy=use_strategy)
     print(f'  Extracted {len(items)} items')
     return items
 
@@ -135,7 +138,7 @@ def cmd_convert(args):
     else:
         md_content = read_file(input_path)
 
-    items = run_pipeline(md_content, args.dry_run)
+    items = run_pipeline(md_content, args.dry_run, use_strategy=not args.no_strategy)
 
     if not args.dry_run and items:
         out = args.output or os.path.join('output5', Path(input_path).stem + '.json')
@@ -198,7 +201,7 @@ def cmd_batch(args):
     for i, fp in enumerate(md_files):
         print(f'\n[{i+1}/{len(md_files)}] {fp.name}')
         try:
-            items = run_pipeline(read_file(str(fp)))
+            items = run_pipeline(read_file(str(fp)), use_strategy=not args.no_strategy)
             if items:
                 out_path = os.path.join(out_dir, f'{fp.stem}.json')
                 write_json(items, out_path)
@@ -237,12 +240,16 @@ def main():
                     help=f'PDF converter (default: {CONVERTER})')
     pc.add_argument('--skip-fusion', action='store_true')
     pc.add_argument('--dry-run', action='store_true')
+    pc.add_argument('--no-strategy', action='store_true',
+                    help='Use fixed default prompt instead of dynamic strategy selection')
 
     pb = sub.add_parser('batch', help='Batch process a directory')
     pb.add_argument('input', help='Directory with .md or .pdf files')
     pb.add_argument('--output', '-o', help='Output directory')
     pb.add_argument('--converter', '-c', choices=['ocr_vl', 'mineru'],
                     help=f'PDF converter (for PDF inputs, default: {CONVERTER})')
+    pb.add_argument('--no-strategy', action='store_true',
+                    help='Use fixed default prompt instead of dynamic strategy selection')
 
     pv = sub.add_parser('validate', help='Validate JSON output')
     pv.add_argument('input', help='JSON file')
